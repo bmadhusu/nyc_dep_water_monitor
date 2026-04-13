@@ -182,37 +182,39 @@ def extract_latest_usage(data: dict) -> tuple:
 
     return date_str, summary
 
+def find_peak_usage(data: dict) -> tuple:
+    readings = data.get("consumption", [])
 
-def send_email(date_str: str, usage_str: str, monthly_summary: str) -> None:
-    """
-    Sends a Gmail email with the water usage summary.
+    if not readings:
+        return ("Unknown", "Unknown")
 
-    Gmail App Password setup:
-      1. Enable 2-Step Verification on your Google account
-      2. Go to myaccount.google.com > Security > App Passwords
-      3. Create an App Password for "Mail"
-      4. Paste the 16-character password as GMAIL_APP_PASSWORD in your .env
-    """
+    peak = max(readings, key=lambda r: r.get("value", 0))
+    peak_date = peak.get("timePeriod", "Unknown")
+    peak_value = f"{peak.get('value', '?')} {peak.get('consumptionUnitOfMeasureSymbol', '')}"
+    return (peak_date, peak_value)
+def send_email(date_str: str, usage_str: str, monthly_summary: str, peak_usage: tuple) -> None:
+    peak_date, peak_value = peak_usage
+    recipients = [addr.strip() for addr in EMAIL_TO.split(",")]
     today = datetime.now().strftime("%B %d, %Y")
     subject = f"NYC DEP Water Usage — (Yesterdays reading: {usage_str})"
     body = (
         f"Your NYC DEP water usage report for yesterday\n\n"
-        f"  Latest reading:  {date_str}\n"
-        f"  Usage:           {usage_str}\n\n"
-        f"  For comparison, the highest single day reading this year has been: 225 CF on January 22.\n"
-        f"  Month to date:   {monthly_summary}\n\n"
+        f"  Latest reading:        {date_str}\n"
+        f"  Usage:                 {usage_str}\n\n"
+        f"  Month to date:         {monthly_summary}\n"
+        f"  Peak Month To Date:    {peak_value} on {peak_date}\n\n"
+        f"  For comparison, the highest single day reading this year has been: 225 CF on January 22.\n\n"
+
         f"View full details at: https://a826-umax.dep.nyc.gov/\n"
     )
-
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = GMAIL_ADDRESS
-    msg["To"] = EMAIL_TO
-
-    print(f">>> Sending email to {EMAIL_TO}...")
+    msg["To"] = ", ".join(recipients)
+    print(f">>> Sending email to {recipients}...")
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(GMAIL_ADDRESS, GMAIL_APP_PW)
-        server.sendmail(GMAIL_ADDRESS, EMAIL_TO, msg.as_string())
+        server.sendmail(GMAIL_ADDRESS, recipients, msg.as_string())
     print(">>> Email sent successfully.")
 
 
@@ -223,11 +225,11 @@ def main():
         usage_data              = get_usage_data(bearer_token)
         date_str, usage_str     = extract_latest_usage(usage_data)
         monthly_summary         = usage_data["summary"][0]  # "Your total consumption = 359.00 CF"
-
+        peak_usage              = find_peak_usage(usage_data)
 
 
         print(f"\n=== Latest Usage: {usage_str} on {date_str} ===\n")
-        send_email(date_str, usage_str, monthly_summary)
+        send_email(date_str, usage_str, monthly_summary, peak_usage)
 
     except PlaywrightTimeoutError:
         print("ERROR: Timed out waiting for login. Check your credentials or the login page selectors.")
