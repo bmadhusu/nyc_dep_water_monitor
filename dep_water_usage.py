@@ -65,7 +65,7 @@ def login_and_get_session_cookie() -> str:
     """
     print(">>> Launching browser and logging in...")
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=HEADLESS, slow_mo=500)
+        browser = p.chromium.launch(headless=true, slow_mo=0)
         context = browser.new_context()
         page = context.new_page()
 
