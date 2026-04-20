@@ -231,10 +231,13 @@ def main():
         print(f"\n=== Latest Usage: {usage_str} on {date_str} ===\n")
         send_email(date_str, usage_str, monthly_summary, peak_usage)
 
-    except PlaywrightTimeoutError:
+    except PlaywrightTimeoutError as e:
         print("ERROR: Timed out waiting for login. Check your credentials or the login page selectors.")
+        print(f"Details: {e}")
+        exit(1)
     except requests.HTTPError as e:
         print(f"ERROR: API call failed — {e}")
+        exit(1)
     except Exception as e:
         print(f"ERROR: {e}")
         raise
