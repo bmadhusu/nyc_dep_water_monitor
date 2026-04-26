@@ -41,16 +41,20 @@ GET_TOKEN_URL  = "https://a826-umax.dep.nyc.gov/Session/GetAuthTokenForCurrentUs
 
 
 def build_usage_url() -> str:
-    today = datetime.now().strftime("%a %b %d %Y")  # e.g. "Sat Apr 11 2026"
-    encoded_date = quote(today)                      # e.g. "Sat%20Apr%2011%202026"
+    today = datetime.now()
+    first_of_month = today.replace(day=1)
+    from_date = first_of_month.strftime("%a %b %d %Y")  # e.g. "Mon Apr 01 2026"
+    to_date = today.strftime("%a %b %d %Y")            # e.g. "Sat Apr 26 2026"
+    encoded_from = quote(from_date)
+    encoded_to = quote(to_date)
     return (
         "https://umaxazprodcsswebapin.azurewebsites.net/api/account/GetExtendedDailyUsageGraphData"
         f"?accountId={ACCOUNT_ID}"
         f"&serviceId={SERVICE_ID}"
         f"&meterId={METER_ID}"
         f"&graphTypeId=DailyMonth"
-        f"&periodFromDate={encoded_date}"
-        f"&periodToDate=null"
+        f"&periodFromDate={encoded_from}"
+        f"&periodToDate={encoded_to}"
         f"&includeWeatherOverlay=false"
         f"&registerId={REGISTER_ID}"
         f"&compareRange=None"
