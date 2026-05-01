@@ -16,7 +16,7 @@ import json
 import smtplib
 import requests
 from email.mime.text import MIMEText
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from urllib.parse import quote
@@ -40,13 +40,9 @@ DEP_LOGIN_URL  = "https://a826-umax.dep.nyc.gov/"
 GET_TOKEN_URL  = "https://a826-umax.dep.nyc.gov/Session/GetAuthTokenForCurrentUser"
 
 
-def build_usage_url() -> str:
-    today = datetime.now()
-    first_of_month = today.replace(day=1)
-    from_date = first_of_month.strftime("%a %b %d %Y")  # e.g. "Mon Apr 01 2026"
-    to_date = today.strftime("%a %b %d %Y")            # e.g. "Sat Apr 26 2026"
-    encoded_from = quote(from_date)
-    encoded_to = quote(to_date)
+def build_usage_url(from_date: datetime, to_date: datetime) -> str:
+    encoded_from = quote(from_date.strftime("%a %b %d %Y"))
+    encoded_to = quote(to_date.strftime("%a %b %d %Y"))
     return (
         "https://umaxazprodcsswebapin.azurewebsites.net/api/account/GetExtendedDailyUsageGraphData"
         f"?accountId={ACCOUNT_ID}"
@@ -59,6 +55,16 @@ def build_usage_url() -> str:
         f"&registerId={REGISTER_ID}"
         f"&compareRange=None"
     )
+
+def get_current_month_range() -> tuple[datetime, datetime]:
+    today = datetime.now()
+    return today.replace(day=1), today
+
+
+def get_previous_month_range() -> tuple[datetime, datetime]:
+    today = datetime.now()
+    last_day_prev_month = today.replace(day=1) - timedelta(days=1)
+    return last_day_prev_month.replace(day=1), last_day_prev_month
 
 
 
@@ -140,22 +146,33 @@ def get_usage_data(bearer_token: str) -> dict:
     """
     Calls the usage API and returns the parsed JSON response.
     """
-    print(">>> Fetching water usage data...")
-    url = build_usage_url()
-    resp = requests.get(
-        url,
-        headers={
-            "Accept": "application/json, text/plain, */*",
-            "Authorization": f"Bearer {bearer_token}",
-            "Origin": "https://a826-umax.dep.nyc.gov",
-            "Referer": "https://a826-umax.dep.nyc.gov/",
-        },
-    )
-    resp.raise_for_status()
-    data = resp.json()
+    def fetch_usage_for_range(from_date: datetime, to_date: datetime) -> dict:
+        print(f">>> Fetching water usage data for {from_date:%b %d, %Y} to {to_date:%b %d, %Y}...")
+        url = build_usage_url(from_date, to_date)
+        resp = requests.get(
+            url,
+            headers={
+                "Accept": "application/json, text/plain, */*",
+                "Authorization": f"Bearer {bearer_token}",
+                "Origin": "https://a826-umax.dep.nyc.gov",
+                "Referer": "https://a826-umax.dep.nyc.gov/",
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        print(f">>> Usage API response (truncated):\n{json.dumps(data, indent=2)[:1500]}")
+        return data
 
-    # Print raw response on first run so you can see the structure:
-    print(f">>> Usage API response (truncated):\n{json.dumps(data, indent=2)[:1500]}")
+    current_from, current_to = get_current_month_range()
+    data = fetch_usage_for_range(current_from, current_to)
+
+    if current_to.day == 1 and not any(
+        not c.get("isNoRead", False) for c in data.get("consumption", [])
+    ):
+        print(">>> No actual readings available for the current month yet; falling back to the previous month.")
+        prev_from, prev_to = get_previous_month_range()
+        data = fetch_usage_for_range(prev_from, prev_to)
+
     return data
 
 
