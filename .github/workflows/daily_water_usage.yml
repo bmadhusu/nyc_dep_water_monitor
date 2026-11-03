@@ -7,7 +7,7 @@ on:
 
 jobs:
   fetch-usage:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repo
@@ -21,8 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync
-          uv run playwright install chromium
-          uv run playwright install-deps chromium
+          uv run playwright install --with-deps chromium
 
       - name: Run script
         env:
